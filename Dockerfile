@@ -13,6 +13,7 @@ RUN pip install matplotlib
 
 #add
 RUN pip2 install jupyter
+RUN pip2 install pillow
 RUN ipython2 kernelspec install-self
 
 RUN ["mkdir", "notebooks"]

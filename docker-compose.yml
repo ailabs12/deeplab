@@ -2,7 +2,7 @@ version: '2'
 services:
   web:
     container_name: deeplab
-    image: "variant"
+    image: "py2_with_pillow"
     volumes:
       - /home/bka2/models-master/research/deeplab:/notebooks
     ports:
