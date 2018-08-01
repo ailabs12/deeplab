@@ -1,0 +1,9 @@
+version: '2'
+services:
+  web:
+    container_name: deeplab
+    image: "variant"
+    volumes:
+      - /home/bka2/models-master/research/deeplab:/notebooks
+    ports:
+      - "8888:8888"
