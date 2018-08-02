@@ -1,0 +1,1 @@
+RUN THE SCRIPT: install.sh IN THE PROJECT FOLDER: deeplab
