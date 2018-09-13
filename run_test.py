@@ -18,6 +18,9 @@ import tensorflow as tf
 
 import json
 
+import cv2, errno, base64
+import sql
+
 #@title Helper methods
 
 
@@ -203,15 +206,43 @@ IMAGE_URL = 'https://static.mk.ru/upload/entities/2018/07/27/articles/detailPict
 
 _SAMPLE_URL = ('https://github.com/tensorflow/models/blob/master/research/deeplab/g3doc/img/%s.jpg?raw=true')
 
-
+counter_image = 1
 
 def run_visualization(url):
   """Inferences DeepLab model and visualizes result."""
+
+  global counter_image
+  db = 'test.db'
+
+  images_path = './images'
+  frames_path = images_path + '/frames/'
+  object_path = images_path + '/objects/'
+
+  try:
+    os.makedirs(images_path)
+  except OSError as e:
+    if e.errno != errno.EEXIST:
+      raise
+
+  try:
+    os.makedirs(frames_path)
+  except OSError as e:
+    if e.errno != errno.EEXIST:
+      raise
+
   try:
     f = urllib.request.urlopen(url)
     jpeg_str = f.read()
     original_im = Image.open(BytesIO(jpeg_str))
-    original_im.save('original_im.png')
+    original_im.save(frames_path + str(counter_image) + '.png')
+
+    outputBuffer = BytesIO()
+    original_im.save(outputBuffer, format='PNG')
+    imageBase64Data = outputBuffer.getvalue()
+    data = base64.b64encode(imageBase64Data)
+    outputBuffer.close
+    sql.add_record(db, data)
+
   except IOError:
     print('Cannot retrieve image. Please check url: ' + url)
     return
@@ -222,6 +253,7 @@ def run_visualization(url):
 
   detected_objects = {}
 
+  list3d = [[[(0, 0, 0, 0) for j in range( len(seg_map[i]) )] for i in range( len(seg_map) )] for k in range( len(LABEL_NAMES) )]
   print( len(seg_map) )
 
   # Formation of the list of found classes
@@ -230,12 +262,35 @@ def run_visualization(url):
       if not( LABEL_NAMES[ seg_map[i][j] ] in detected_objects):
         detected_objects[ LABEL_NAMES[seg_map[i][j] ] ] = []
       detected_objects[ LABEL_NAMES[ seg_map[i][j] ] ].append( { 'y': i, 'x': j } )
-      if seg_map[i][j] != 15:
-        resized_im.putpixel((j, i), (0, 0, 0, 0))
+      tuple_color = resized_im.getpixel( (j,i) )
+      list3d[seg_map[i][j]][i][j] = tuple_color
 
-  resized_im.save('resized_im.png')
+  # Classes output
+  for k in range( len(LABEL_NAMES) ):
+    if LABEL_NAMES[k] in detected_objects.keys():
+      pix = np.array(list3d[k]) #, dtype=object
+      pix = pix.astype(np.float32)
+      pix = cv2.cvtColor(pix, cv2.COLOR_BGR2RGBA)
+      data = cv2.imencode('.png', pix)[1].tostring()
+      sql.add_record_class(db, LABEL_NAMES[k])
+      sql.add_record_child(db, LABEL_NAMES[k], data)
 
-  print "Value : %s" %  detected_objects.keys()
+      if not os.path.exists(object_path + LABEL_NAMES[k]):
+        try:
+          os.makedirs(object_path + LABEL_NAMES[k])
+          cv2.imwrite(object_path + LABEL_NAMES[k] + '/frame_' + str(counter_image) + '_' + LABEL_NAMES[k] + '.png', pix)
+        except OSError as e:
+          if e.errno != errno.EEXIST:
+            raise
+      else:
+        cv2.imwrite(object_path + LABEL_NAMES[k] + '/frame_' + str(counter_image) + '_' + LABEL_NAMES[k] + '.png', pix)
+
+  counter_image+=1
+  
+  print( "Value : %s" %  detected_objects.keys() )
+  res_orig = sql.extr_record(db, 1)
+  res_child = sql.child_extr_record(db, 1)
+  #print "Value : %s" %  detected_objects.keys() ##########
 
   image_array = open('image_array.txt', 'w')
   image_array.write(json.dumps(detected_objects, sort_keys=True))
@@ -247,7 +302,7 @@ def run_visualization(url):
   # import scipy.misc
   # scipy.misc.imsave('image_test.png', seg_map)
 
-  vis_segmentation(resized_im, seg_map)
+  #vis_segmentation(resized_im, seg_map) ###########
 
 
 
