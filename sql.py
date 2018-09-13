@@ -125,7 +125,6 @@ def extract_picture(cursor, picture_id): #ADD picture_file
         record = cursor.fetchone()
         if record != None:
             ablob, *_ = record
-
             with open(pic, 'wb') as output_file:
                 output_file.write(base64.b64decode(ablob))
         else:
@@ -294,6 +293,32 @@ def add_record_class(db_name, class_name):
     #Close the database
     conn.close()
 
+#Sql request
+def sql_exec(db_name, sql_request):
+
+    #Open the database
+    conn = create_or_open_db(db_name)
+    cur = conn.cursor()
+
+    try:
+        conn.execute("PRAGMA foreign_keys = ON;")
+        cur.execute(sql_request)
+        conn.commit()
+    
+    except sqlite3.Error:
+        print("Error sqlite3 sql_exec")
+        #Close the database
+        cur.close()
+        conn.close()
+        return 1
+    
+    else:
+        result = cur.fetchall()
+        #Close the database
+        cur.close()
+        conn.close()
+        return result
+
 #Examples
 #db = 'test.db'
 #add_record(db, binary_data)
@@ -303,3 +328,12 @@ def add_record_class(db_name, class_name):
 #original_picture = extr_record(db, 1)
 #cut_picture = child_extr_record(db, 1)
 #cut_picture2 = child_extr_record(db, 2)
+
+'''
+#Exmaple sql request
+db = 'test.db'
+result = sql_exec(db, "SELECT rowid, PICTURES_ID, CLASSES_ID_CLASS  FROM CHILD_PICTURES")
+print(result)
+for k in range( len(result) ):
+    print(result[k])
+'''

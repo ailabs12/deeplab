@@ -288,8 +288,8 @@ def run_visualization(url):
   counter_image+=1
   
   print( "Value : %s" %  detected_objects.keys() )
-  res_orig = sql.extr_record(db, 1)
-  res_child = sql.child_extr_record(db, 1)
+  # res_orig = sql.extr_record(db, 1)
+  # res_child = sql.child_extr_record(db, 1)
   #print "Value : %s" %  detected_objects.keys() ##########
 
   image_array = open('image_array.txt', 'w')
@@ -304,7 +304,14 @@ def run_visualization(url):
 
   #vis_segmentation(resized_im, seg_map) ###########
 
-
-
 image_url = IMAGE_URL or _SAMPLE_URL % SAMPLE_IMAGE
 run_visualization(image_url)
+
+# res_orig2 = sql.extr_record('test.db', 1)
+# print(res_orig2[:100])
+
+# res_child2 = sql.child_extr_record('test.db', 1)
+# print(res_child2)
+
+# print(res_child2)
+# print "Value : %s" %  detected_objects.keys() ##########
