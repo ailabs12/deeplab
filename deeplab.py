@@ -250,8 +250,8 @@ def run_visualization(url):
     for j in range( len(seg_map[i]) ):
       if not( LABEL_NAMES[ seg_map[i][j] ] in detected_objects):
         detected_objects[ LABEL_NAMES[seg_map[i][j] ] ] = []
-      detected_objects[ LABEL_NAMES[ seg_map[i][j] ] ].append( { 'y': i, 'x': j } )
       tuple_color = resized_im.getpixel( (j,i) )
+      detected_objects[ LABEL_NAMES[ seg_map[i][j] ] ].append( { 'y': i, 'x': j, 'rgba': tuple_color } )
       list3d[seg_map[i][j]][i][j] = tuple_color
 
   # Classes output
@@ -292,7 +292,8 @@ def run_visualization(url):
   # scipy.misc.imsave('image_test.png', seg_map)
 
   #vis_segmentation(resized_im, seg_map) ###########
-  return detected_objects.keys()
+  # return detected_objects.keys()
+  return detected_objects
 
 
 
@@ -301,6 +302,7 @@ def run_visualization(url):
 
 # IMAGE_URL = 'https://static.mk.ru/upload/entities/2018/07/27/articles/detailPicture/29/bc/22/88/836556deb3f8e01b2d80a627916145f1.jpg'
 # found_objects = run_visualization(IMAGE_URL)
+# print(found_objects)
 
 ############# Example of working with database #############
 # res_orig2 = sql.extr_record('test.db', 1)
