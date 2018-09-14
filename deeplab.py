@@ -1,4 +1,3 @@
-#block 1
 import sys
 print(sys.version)
 
@@ -17,7 +16,11 @@ from PIL import Image
 
 import tensorflow as tf
 
-#block 2
+import json
+
+import cv2, errno, base64
+import sql
+
 #@title Helper methods
 
 
@@ -128,6 +131,7 @@ def vis_segmentation(image, seg_map):
 
   plt.subplot(grid_spec[1])
   seg_image = label_to_color_image(seg_map).astype(np.uint8)
+  # seg_image.save('seg_image.png');
   plt.imshow(seg_image)
   plt.axis('off')
   plt.title('segmentation map')
@@ -159,7 +163,9 @@ LABEL_NAMES = np.asarray([
 FULL_LABEL_MAP = np.arange(len(LABEL_NAMES)).reshape(len(LABEL_NAMES), 1)
 FULL_COLOR_MAP = label_to_color_image(FULL_LABEL_MAP)
 
-#block 3
+
+
+
 #@title Select and download models {display-mode: "form"}
 
 MODEL_NAME = 'mobilenetv2_coco_voctrainaug'  # @param ['mobilenetv2_coco_voctrainaug', 'mobilenetv2_coco_voctrainval', 'xception_coco_voctrainaug', 'xception_coco_voctrainval']
@@ -189,33 +195,116 @@ print('download completed! loading DeepLab model...')
 MODEL = DeepLabModel(download_path)
 print('model loaded successfully!')
 
-#block 4
-#@title Run on sample images {display-mode: "form"}
-
-SAMPLE_IMAGE = 'image1'  # @param ['image1', 'image2', 'image3']
-#Path your image
-IMAGE_URL = 'https://static.mk.ru/upload/entities/2018/07/27/articles/detailPicture/29/bc/22/88/836556deb3f8e01b2d80a627916145f1.jpg'  #@param {type:"string"}
-
-_SAMPLE_URL = ('https://github.com/tensorflow/models/blob/master/research/deeplab/g3doc/img/%s.jpg?raw=true')
-
+counter_image = 1
 
 def run_visualization(url):
   """Inferences DeepLab model and visualizes result."""
+
+  global counter_image
+  db = 'test.db'
+
+  images_path = './images'
+  frames_path = images_path + '/frames/'
+  object_path = images_path + '/objects/'
+
+  try:
+    os.makedirs(images_path)
+  except OSError as e:
+    if e.errno != errno.EEXIST:
+      raise
+
+  try:
+    os.makedirs(frames_path)
+  except OSError as e:
+    if e.errno != errno.EEXIST:
+      raise
+
   try:
     f = urllib.request.urlopen(url)
     jpeg_str = f.read()
     original_im = Image.open(BytesIO(jpeg_str))
+    original_im.save(frames_path + str(counter_image) + '.png')
+
+    outputBuffer = BytesIO()
+    original_im.save(outputBuffer, format='PNG')
+    imageBase64Data = outputBuffer.getvalue()
+    data = base64.b64encode(imageBase64Data)
+    outputBuffer.close
+    sql.add_record(db, data)
+
   except IOError:
     print('Cannot retrieve image. Please check url: ' + url)
     return
 
-  print('running deeplab on image %s...' % url)
+  # print('running deeplab on image %s...' % url)
   resized_im, seg_map = MODEL.run(original_im)
+  resized_im = resized_im.convert('RGBA')
 
-  vis_segmentation(resized_im, seg_map)
-  #resized_im.save('resized_im');
-  seg_map.save('seg_map');
+  detected_objects = {}
+
+  list3d = [[[(0, 0, 0, 0) for j in range( len(seg_map[i]) )] for i in range( len(seg_map) )] for k in range( len(LABEL_NAMES) )]
+  # print( len(seg_map) )
+
+  # Formation of the list of found classes
+  for i in range( len(seg_map) ):
+    for j in range( len(seg_map[i]) ):
+      if not( LABEL_NAMES[ seg_map[i][j] ] in detected_objects):
+        detected_objects[ LABEL_NAMES[seg_map[i][j] ] ] = []
+      detected_objects[ LABEL_NAMES[ seg_map[i][j] ] ].append( { 'y': i, 'x': j } )
+      tuple_color = resized_im.getpixel( (j,i) )
+      list3d[seg_map[i][j]][i][j] = tuple_color
+
+  # Classes output
+  for k in range( len(LABEL_NAMES) ):
+    if LABEL_NAMES[k] in detected_objects.keys():
+      pix = np.array(list3d[k]) #, dtype=object
+      pix = pix.astype(np.float32)
+      pix = cv2.cvtColor(pix, cv2.COLOR_BGR2RGBA)
+      data = cv2.imencode('.png', pix)[1].tostring()
+      sql.add_record_class(db, LABEL_NAMES[k])
+      sql.add_record_child(db, LABEL_NAMES[k], data)
+
+      if not os.path.exists(object_path + LABEL_NAMES[k]):
+        try:
+          os.makedirs(object_path + LABEL_NAMES[k])
+          cv2.imwrite(object_path + LABEL_NAMES[k] + '/frame_' + str(counter_image) + '_' + LABEL_NAMES[k] + '.png', pix)
+        except OSError as e:
+          if e.errno != errno.EEXIST:
+            raise
+      else:
+        cv2.imwrite(object_path + LABEL_NAMES[k] + '/frame_' + str(counter_image) + '_' + LABEL_NAMES[k] + '.png', pix)
+
+  counter_image+=1
+  
+  # print( "Value : %s" %  detected_objects.keys() )
+  # res_orig = sql.extr_record(db, 1)
+  # res_child = sql.child_extr_record(db, 1)
+  #print "Value : %s" %  detected_objects.keys() ##########
+
+  image_array = open('image_array.txt', 'w')
+  image_array.write(json.dumps(detected_objects, sort_keys=True))
+  image_array.close()
+
+  # resized_im.putpixel((25, 45), (255, 0, 0))
+  # original_im[]
+
+  # import scipy.misc
+  # scipy.misc.imsave('image_test.png', seg_map)
+
+  #vis_segmentation(resized_im, seg_map) ###########
+  return detected_objects.keys()
 
 
-image_url = IMAGE_URL or _SAMPLE_URL % SAMPLE_IMAGE
-run_visualization(image_url)
+
+############# Example run segmentations #############
+# SAMPLE_IMAGE = 'image1'  # @param ['image1', 'image2', 'image3']
+
+# IMAGE_URL = 'https://static.mk.ru/upload/entities/2018/07/27/articles/detailPicture/29/bc/22/88/836556deb3f8e01b2d80a627916145f1.jpg'
+# found_objects = run_visualization(IMAGE_URL)
+
+############# Example of working with database #############
+# res_orig2 = sql.extr_record('test.db', 1)
+# print(res_orig2)
+
+# res_child2 = sql.child_extr_record('test.db', 1)
+# print(res_child2)
