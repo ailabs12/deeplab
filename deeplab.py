@@ -222,14 +222,15 @@ def run_visualization(url):
   try:
     f = urllib.request.urlopen(url)
     jpeg_str = f.read()
+
     original_im = Image.open(BytesIO(jpeg_str))
-    original_im.save(frames_path + str(counter_image) + '.png')
+    original_im.save(frames_path + str(counter_image) + '.jpeg')
 
     outputBuffer = BytesIO()
-    original_im.save(outputBuffer, format='PNG')
+    original_im.save(outputBuffer, format='JPEG')
     imageBase64Data = outputBuffer.getvalue()
     data = base64.b64encode(imageBase64Data)
-    outputBuffer.close
+    outputBuffer.close()
     sql.add_record(db, data)
 
   except IOError:
@@ -240,7 +241,7 @@ def run_visualization(url):
   resized_im, seg_map = MODEL.run(original_im)
   resized_im = resized_im.convert('RGBA')
 
-  detected_objects = {}
+  detected_objects = { "image": "data:image/jpeg;base64," + data }
 
   list3d = [[[(0, 0, 0, 0) for j in range( len(seg_map[i]) )] for i in range( len(seg_map) )] for k in range( len(LABEL_NAMES) )]
   # print( len(seg_map) )
@@ -251,7 +252,8 @@ def run_visualization(url):
       if not( LABEL_NAMES[ seg_map[i][j] ] in detected_objects):
         detected_objects[ LABEL_NAMES[seg_map[i][j] ] ] = []
       tuple_color = resized_im.getpixel( (j,i) )
-      detected_objects[ LABEL_NAMES[ seg_map[i][j] ] ].append( { 'y': i, 'x': j, 'rgba': tuple_color } )
+      # detected_objects[ LABEL_NAMES[ seg_map[i][j] ] ].append( { 'y': i, 'x': j, 'rgba': tuple_color } )
+      detected_objects[ LABEL_NAMES[ seg_map[i][j] ] ].append([j,i])
       list3d[seg_map[i][j]][i][j] = tuple_color
 
   # Classes output
@@ -260,19 +262,19 @@ def run_visualization(url):
       pix = np.array(list3d[k]) #, dtype=object
       pix = pix.astype(np.float32)
       pix = cv2.cvtColor(pix, cv2.COLOR_BGR2RGBA)
-      data = cv2.imencode('.png', pix)[1].tostring()
+      data = cv2.imencode('.jpeg', pix)[1].tostring()
       sql.add_record_class(db, LABEL_NAMES[k])
       sql.add_record_child(db, LABEL_NAMES[k], data)
 
       if not os.path.exists(object_path + LABEL_NAMES[k]):
         try:
           os.makedirs(object_path + LABEL_NAMES[k])
-          cv2.imwrite(object_path + LABEL_NAMES[k] + '/frame_' + str(counter_image) + '_' + LABEL_NAMES[k] + '.png', pix)
+          cv2.imwrite(object_path + LABEL_NAMES[k] + '/frame_' + str(counter_image) + '_' + LABEL_NAMES[k] + '.jpeg', pix)
         except OSError as e:
           if e.errno != errno.EEXIST:
             raise
       else:
-        cv2.imwrite(object_path + LABEL_NAMES[k] + '/frame_' + str(counter_image) + '_' + LABEL_NAMES[k] + '.png', pix)
+        cv2.imwrite(object_path + LABEL_NAMES[k] + '/frame_' + str(counter_image) + '_' + LABEL_NAMES[k] + '.jpeg', pix)
 
   counter_image+=1
   
